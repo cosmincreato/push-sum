@@ -128,7 +128,6 @@ func main() {
 			}
 		}
 
-		// Print a compact block of info
 		fmt.Printf("Maximum Error: %.6f\n", maxErr)
 		fmt.Print("Estimates: ")
 		for i, est := range currentEstimates {
