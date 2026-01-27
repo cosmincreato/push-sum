@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 )
@@ -67,26 +68,36 @@ func main() {
 	// random peer selection
 	rand.Seed(time.Now().UnixNano())
 
+	f_in, err := os.Open("input.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer f_in.Close()
+
+	f_out, err := os.OpenFile("output.txt", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer f_out.Close()
+
 	// input for number of nodes
 	var n int
-	for {
-		fmt.Print("Number of nodes (n): ")
-		_, err := fmt.Scan(&n)
-		if err != nil {
-			return
-		}
-		if n >= 2 {
-			break
-		}
+
+	_, err = fmt.Fscan(f_in, &n)
+	if err != nil {
+		panic(err)
+	}
+
+	if n < 2 {
 		fmt.Println("The algorithm needs at least 2 nodes.")
+		return
 	}
 
 	// input for initial sum
 	sums := make([]float64, n)
 	var totalSum float64
 	for i := 0; i < n; i++ {
-		fmt.Printf("Sum of node %d: ", i+1)
-		_, err := fmt.Scan(&sums[i])
+		_, err := fmt.Fscan(f_in, &sums[i])
 		if err != nil {
 			return
 		}
@@ -107,6 +118,7 @@ func main() {
 
 	fmt.Println("\nSelect Topology: 1=Ring, 2=Line, 3=Star, 4=Complete")
 	var topology int
+	var topologyName string
 	fmt.Scan(&topology)
 
 	var wg sync.WaitGroup
@@ -117,11 +129,13 @@ func main() {
 
 		switch topology {
 		case 1: // Ring
+			topologyName = "Ring"
 			left := (n - 1 + i) % n
 			right := (i + 1) % n
 			myNeighbors = append(myNeighbors, channels[left], channels[right])
 
 		case 2: // Line
+			topologyName = "Line"
 			if i > 0 { // connect to left
 				myNeighbors = append(myNeighbors, channels[i-1])
 			}
@@ -130,6 +144,7 @@ func main() {
 			}
 
 		case 3: // Star - node 0 is the hub
+			topologyName = "Star"
 			if i == 0 {
 				for j := 1; j < n; j++ {
 					myNeighbors = append(myNeighbors, channels[j])
@@ -139,6 +154,7 @@ func main() {
 			}
 
 		case 4: // Complete
+			topologyName = "Complete"
 			for j := 0; j < n; j++ {
 				if i != j {
 					myNeighbors = append(myNeighbors, channels[j])
@@ -173,6 +189,9 @@ func main() {
 		// stop if converged
 		if maxErr < 0.000001 {
 			fmt.Println("Convergence criteria met.")
+			fmt.Fprintf(f_out, "Topology: %s\n", topologyName)
+			fmt.Fprintf(f_out, "Number of nodes: %d\n", n)
+			fmt.Fprintf(f_out, "Number of rounds: %d\n", counter)
 			break
 		}
 		mu.Unlock()
