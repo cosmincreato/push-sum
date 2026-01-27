@@ -20,7 +20,7 @@ var (
 	mu               sync.Mutex // to prevent race conditions during prints
 )
 
-func node(id int, initialSum float64, in chan Message, left chan Message, right chan Message, wg *sync.WaitGroup, n int, avg float64) {
+func node(id int, initialSum float64, in chan Message, neighbors []chan Message, wg *sync.WaitGroup, n int, avg float64) {
 	defer wg.Done()
 
 	sum := initialSum
@@ -34,10 +34,8 @@ func node(id int, initialSum float64, in chan Message, left chan Message, right 
 		weight = weightHalf
 
 		// select a random peer
-		target := left
-		if rand.Intn(2) == 0 {
-			target = right
-		}
+		randIndex := rand.Intn(len(neighbors))
+		target := neighbors[randIndex]
 
 		// send half the nodes' values
 		target <- Message{Sum: sumHalf, Weight: weightHalf}
@@ -107,12 +105,49 @@ func main() {
 		channels[i] = make(chan Message, n*2)
 	}
 
+	fmt.Println("\nSelect Topology: 1=Ring, 2=Line, 3=Star, 4=Complete")
+	var topology int
+	fmt.Scan(&topology)
+
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
-		left := (n - 1 + i) % n
-		right := (i + 1) % n
-		go node(i, sums[i], channels[i], channels[left], channels[right], &wg, n, avg)
+
+		var myNeighbors []chan Message
+
+		switch topology {
+		case 1: // Ring
+			left := (n - 1 + i) % n
+			right := (i + 1) % n
+			myNeighbors = append(myNeighbors, channels[left], channels[right])
+
+		case 2: // Line
+			if i > 0 { // connect to left
+				myNeighbors = append(myNeighbors, channels[i-1])
+			}
+			if i < n-1 { // connect to right
+				myNeighbors = append(myNeighbors, channels[i+1])
+			}
+
+		case 3: // Star - node 0 is the hub
+			if i == 0 {
+				for j := 1; j < n; j++ {
+					myNeighbors = append(myNeighbors, channels[j])
+				}
+			} else {
+				myNeighbors = append(myNeighbors, channels[0])
+			}
+
+		case 4: // Complete
+			for j := 0; j < n; j++ {
+				if i != j {
+					myNeighbors = append(myNeighbors, channels[j])
+				}
+			}
+		}
+
+		// Pass the constructed neighbor list to the node
+		go node(i, sums[i], channels[i], myNeighbors, &wg, n, avg)
 	}
 
 	counter := 0
